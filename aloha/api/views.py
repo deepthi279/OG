@@ -7,78 +7,42 @@ import uuid
 
 class clientsView(APIView):
 
-
     def get(self, request, *args, **kwargs):
-        """Retrieve a client by Alias (GUID) or ClientId and return with ClientId"""
+        """Retrieve a client by Alias (GUID) or ClientId, or return all clients"""
 
-        # Retrieve the 'Alias' or 'ClientId' from URL path parameters (kwargs)
-        Alias = kwargs.get('Alias', None)  # Retrieve 'alias' from the URL path
-        print('Alias inside Alias',Alias)
-        client_id = kwargs.get('Client_id', None) 
-        print(f"Received Alias: {Alias}, ClientId: {client_id}")  # Retrieve 'client_id' from the URL path
-        #print('client_id inside clientclient_id',client_id)
+        Alias = kwargs.get('Alias', None)
+        client_id = kwargs.get('Client_id', None)
 
         query = ""
         params = []
 
-        # Check if Alias or ClientId is provided and set the query accordingly
         if Alias:
-
             query = "SELECT * FROM clients WHERE Alias = %s;"
             params = [Alias]
         elif client_id:
-
-            query = "SELECT * FROM clients WHERE clientId = %s;"
+            query = "SELECT * FROM clients WHERE ClientId = %s;"
             params = [client_id]
         else:
-            print('inside else block')
-            query = "select * from clients;"
-            print(f"Executing query: {query} with params: {params}")
-       
-
-            # If neither Alias nor ClientId is provided in the URL path, return an error
-            # return Response({"error": "Either 'ClientId' or 'Alias' must be provided."}, status=status.HTTP_400_BAD_REQUEST)
+            query = "SELECT * FROM clients;"
 
         try:
             with connection.cursor() as cursor:
                 cursor.execute(query, params)
-                row = cursor.fetchall()
-                print(f"Query executed. Result: {row}")
-                #print('inside try block',query, params, row)
+                rows = cursor.fetchall()
+                columns = [col[0] for col in cursor.description]
+                results = [dict(zip(columns, row)) for row in rows]
 
-                # If no data is found, return a 404 response
-                if not row:
-                    print(f"No data found for Alias: {Alias} or ClientId: {client_id}")
+                if not results:
                     return Response({"message": "Client not found."}, status=status.HTTP_404_NOT_FOUND)
 
-                # Process the result and format it as a dictionary
-                columns = [col[0] for col in cursor.description]
-                data = dict(zip(columns, row))
+                # Return a single client if querying by ID or Alias
+                if Alias or client_id:
+                    return Response(results[0], status=status.HTTP_200_OK)
 
-                # Return the client details in a structured response
-                return Response({
-                    "ClientId": data.get("ClientId"),
-                    "Alias": data.get("Alias"),
-                    "FirstName": data.get("FirstName"),
-                    "MiddleName": data.get("MiddleName"),
-                    "LastName": data.get("LastName"),
-                    "Office": data.get("Office"),
-                    "DOB": data.get("DOB"),
-                    "Gender": data.get("Gender"),
-                    "Status": data.get("Status"),
-                    "Street": data.get("Street"),
-                    "City": data.get("City"),
-                    "State": data.get("State"),
-                    "ZipCode": data.get("ZipCode"),
-                    "MobilePhone": data.get("MobilePhone"),
-                    "OtherPhone": data.get("OtherPhone"),
-                    "Extension": data.get("Extension"),
-                    "Email": data.get("Email"),
-                    "AddressNotes": data.get("AddressNotes"),
-                    "ProfilePicture": data.get("ProfilePicture")
-                }, status=status.HTTP_200_OK)
+                # Return all clients
+                return Response(results, status=status.HTTP_200_OK)
+
         except Exception as e:
-        # If an exception occurs, return an internal server error response
             print(f"Error: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
    
@@ -110,7 +74,7 @@ class clientsView(APIView):
             """
             with connection.cursor() as cursor:
                 cursor.execute(insert_query, (
-                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'), data.get(Alias), 
+                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'), data.get('Alias'), 
                     data.get('Office'), data.get('DOB'), data.get('Gender'), data.get('Status'),
                     data.get('Street'), data.get('City'), data.get('State'), data.get('ZipCode'),
                     data.get('MobilePhone'), data.get('OtherPhone'), data.get('Extension'),
