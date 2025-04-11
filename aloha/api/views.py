@@ -1,42 +1,61 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-import uuid
 from django.db import connection
+import uuid
 
 
 class clientsView(APIView):
 
+
     def get(self, request, *args, **kwargs):
         """Retrieve a client by Alias (GUID) or ClientId and return with ClientId"""
-        client_id = request.query_params.get('ClientId')  # Retrieve ClientId from query params
-        alias = request.query_params.get('Alias')  # Retrieve Alias from query params
 
-        if not client_id and not alias:
-            return Response({"error": "Either 'ClientId' or 'Alias' must be provided."}, status=status.HTTP_400_BAD_REQUEST)
+        # Retrieve the 'Alias' or 'ClientId' from URL path parameters (kwargs)
+        Alias = kwargs.get('Alias', None)  # Retrieve 'alias' from the URL path
+        print('Alias inside Alias',Alias)
+        client_id = kwargs.get('Client_id', None) 
+        print(f"Received Alias: {Alias}, ClientId: {client_id}")  # Retrieve 'client_id' from the URL path
+        #print('client_id inside clientclient_id',client_id)
 
         query = ""
         params = []
 
-        if client_id:
-            query = "SELECT * FROM clients WHERE ClientId = %s;"
-            params = [client_id]
-        elif alias:
+        # Check if Alias or ClientId is provided and set the query accordingly
+        if Alias:
+
             query = "SELECT * FROM clients WHERE Alias = %s;"
-            params = [alias]
+            params = [Alias]
+        elif client_id:
+
+            query = "SELECT * FROM clients WHERE clientId = %s;"
+            params = [client_id]
+        else:
+            print('inside else block')
+            query = "select * from clients;"
+            print(f"Executing query: {query} with params: {params}")
+       
+
+            # If neither Alias nor ClientId is provided in the URL path, return an error
+            # return Response({"error": "Either 'ClientId' or 'Alias' must be provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with connection.cursor() as cursor:
                 cursor.execute(query, params)
-                row = cursor.fetchone()
+                row = cursor.fetchall()
+                print(f"Query executed. Result: {row}")
+                #print('inside try block',query, params, row)
 
+                # If no data is found, return a 404 response
                 if not row:
+                    print(f"No data found for Alias: {Alias} or ClientId: {client_id}")
                     return Response({"message": "Client not found."}, status=status.HTTP_404_NOT_FOUND)
 
+                # Process the result and format it as a dictionary
                 columns = [col[0] for col in cursor.description]
                 data = dict(zip(columns, row))
 
-                # Return the Client details
+                # Return the client details in a structured response
                 return Response({
                     "ClientId": data.get("ClientId"),
                     "Alias": data.get("Alias"),
@@ -58,27 +77,29 @@ class clientsView(APIView):
                     "AddressNotes": data.get("AddressNotes"),
                     "ProfilePicture": data.get("ProfilePicture")
                 }, status=status.HTTP_200_OK)
-
         except Exception as e:
+        # If an exception occurs, return an internal server error response
+            print(f"Error: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+   
 
     def post(self, request, *args, **kwargs):
         """Add a new client with a unique Alias (GUID)"""
-        alias = request.data.get('Alias')
+        Alias = request.data.get('Alias')
 
-        if not alias:
-            alias = str(uuid.uuid4())  # Generate a GUID if Alias is not provided
-        print('///////////////',alias)
+        if not Alias:
+            Alias = str(uuid.uuid4())  # Generate a GUID if Alias is not provided
+        print('///////////////',Alias)
         # Check if Alias already exists
-        check_alias_query = "SELECT COUNT(*) FROM clients WHERE Alias = %s;"
+        check_Alias_query = "SELECT COUNT(*) FROM clients WHERE Alias = %s;"
 
         try:
             data = request.data
             with connection.cursor() as cursor:
-                cursor.execute(check_alias_query, [alias])
-                alias_count = cursor.fetchone()[0]
+                cursor.execute(check_Alias_query, [Alias])
+                Alias_count = cursor.fetchone()[0]
 
-            if alias_count > 0:
+            if Alias_count > 0:
                 return Response({"error": "Alias must be unique."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Insert the new client data into the database
@@ -89,7 +110,7 @@ class clientsView(APIView):
             """
             with connection.cursor() as cursor:
                 cursor.execute(insert_query, (
-                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'), alias, 
+                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'), data.get(Alias), 
                     data.get('Office'), data.get('DOB'), data.get('Gender'), data.get('Status'),
                     data.get('Street'), data.get('City'), data.get('State'), data.get('ZipCode'),
                     data.get('MobilePhone'), data.get('OtherPhone'), data.get('Extension'),
@@ -97,27 +118,27 @@ class clientsView(APIView):
                 ))
                 connection.commit()  # Ensure the data is committed to the database
 
-            return Response({"message": "Client added successfully.", "Alias": alias}, status=status.HTTP_201_CREATED)
+            return Response({"message": "Client added successfully.", "Alias": Alias}, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def put(self, request, *args, **kwargs):
         """Update an existing client by Alias (GUID)"""
-        alias = request.data.get('Alias')
-        if not alias:
+        Alias = request.data.get('Alias')
+        if not Alias:
             return Response({"error": "Alias is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Check if Alias already exists
-        check_alias_query = "SELECT COUNT(*) FROM clients WHERE Alias = %s AND ClientId != %s;"
+        check_Alias_query = "SELECT COUNT(*) FROM clients WHERE Alias = %s AND ClientId != %s;"
 
         try:
             data = request.data
             with connection.cursor() as cursor:
-                cursor.execute(check_alias_query, [alias, data.get('ClientId')])
-                alias_count = cursor.fetchone()[0]
+                cursor.execute(check_Alias_query, [Alias, data.get('ClientId')])
+                Alias_count = cursor.fetchone()[0]
 
-            if alias_count > 0:
+            if Alias_count > 0:
                 return Response({"error": "Alias must be unique."}, status=status.HTTP_400_BAD_REQUEST)
 
             # Update the client details
@@ -130,7 +151,7 @@ class clientsView(APIView):
             """
             with connection.cursor() as cursor:
                 cursor.execute(update_query, (
-                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'), alias, 
+                    data.get('FirstName'), data.get('MiddleName'), data.get('LastName'),data.get('Alias'), 
                     data.get('Office'), data.get('DOB'), data.get('Gender'), data.get('Status'),
                     data.get('Street'), data.get('City'), data.get('State'), data.get('ZipCode'),
                     data.get('MobilePhone'), data.get('OtherPhone'), data.get('Extension'), 
@@ -145,15 +166,15 @@ class clientsView(APIView):
 
     def delete(self, request, *args, **kwargs):
         """Delete a client by Alias (GUID)"""
-        alias = request.data.get('Alias')
-        if not alias:
+        Alias = request.data.get('Alias')
+        if not Alias:
             return Response({"error": "Alias is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         delete_query = "DELETE FROM clients WHERE Alias = %s;"
 
         try:
             with connection.cursor() as cursor:
-                cursor.execute(delete_query, [alias])
+                cursor.execute(delete_query, [Alias])
                 if cursor.rowcount == 0:
                     return Response({"message": "Client not found."}, status=status.HTTP_404_NOT_FOUND)
 
